@@ -40,14 +40,13 @@ public class CustomerModel {
         String productId = cusView.tfId.getText().trim();
         String productName = cusView.tfName.getText().trim();
 
-        theProduct = null; // reset current product
+        theProduct = null;
 
-        // 1) If ID is provided, do ID search (exact match)
-        if (!productId.isEmpty()) {
-
+        // 1) If ProductID is provided, search by ID (exact match)
+        if(!productId.isEmpty()){
             theProduct = databaseRW.searchByProductId(productId); //search database
 
-            if (theProduct != null && theProduct.getStockQuantity() > 0) {
+            if(theProduct != null && theProduct.getStockQuantity()>0){
                 double unitPrice = theProduct.getUnitPrice();
                 String description = theProduct.getProductDescription();
                 int stock = theProduct.getStockQuantity();
@@ -56,42 +55,53 @@ public class CustomerModel {
                 String quantityInfo = stock < 100 ? String.format("\n%d units left.", stock) : "";
                 displayLaSearchResult = baseInfo + quantityInfo;
                 System.out.println(displayLaSearchResult);
-
-            } else {
-                theProduct = null;
-                displayLaSearchResult = "No Product was found with ID " + productId;
-                System.out.println("No Product was found with ID " + productId);
             }
+            else{
+                if(theProduct != null && theProduct.getStockQuantity() == 0){
+                    displayLaSearchResult = "Product " + productId + " is currently out of stock.";
+                } else {
+                    displayLaSearchResult = "No Product was found with ID " + productId;
+                }
+                theProduct = null;
+            }
+
 
             updateView();
             return;
         }
 
-        // 2) Otherwise, if Name is provided, do name search (partial match)
-        if (!productName.isEmpty()) {
-
+        // 2) If ProductID is empty but Name is provided, search by Name (partial match)
+        if(!productName.isEmpty()){
             ArrayList<Product> results = databaseRW.searchProduct(productName);
 
-            if (results != null && !results.isEmpty()) {
-
+            if(results != null && !results.isEmpty()){
                 // Customer UI previews one product, so show the first match
                 theProduct = results.get(0);
 
-                double unitPrice = theProduct.getUnitPrice();
-                String description = theProduct.getProductDescription();
-                int stock = theProduct.getStockQuantity();
+                if(theProduct.getStockQuantity()>0){
+                    double unitPrice = theProduct.getUnitPrice();
+                    String description = theProduct.getProductDescription();
+                    int stock = theProduct.getStockQuantity();
 
-                String baseInfo = String.format("Product_Id: %s\n%s,\nPrice: £%.2f",
-                        theProduct.getProductId(), description, unitPrice);
+                    String baseInfo = String.format("Product_Id: %s\n%s,\nPrice: £%.2f",
+                            theProduct.getProductId(), description, unitPrice);
 
-                String quantityInfo = stock < 100 ? String.format("\n%d units left.", stock) : "";
-                String extraInfo = results.size() > 1 ? String.format("\n(%d matches found - showing first)", results.size()) : "";
+                    String quantityInfo = stock < 100 ? String.format("\n%d units left.", stock) : "";
+                    String extraInfo = results.size() > 1
+                            ? String.format("\n(%d matches found - showing first)", results.size())
+                            : "";
 
-                displayLaSearchResult = baseInfo + quantityInfo + extraInfo;
-                System.out.println(displayLaSearchResult);
-
-            } else {
-                theProduct = null;
+                    displayLaSearchResult = baseInfo + quantityInfo + extraInfo;
+                    System.out.println(displayLaSearchResult);
+                }
+                else{
+                    theProduct=null;
+                    displayLaSearchResult = "Product found but currently out of stock";
+                    System.out.println("Product found but currently out of stock");
+                }
+            }
+            else{
+                theProduct=null;
                 displayLaSearchResult = "No Product was found with name " + productName;
                 System.out.println("No Product was found with name " + productName);
             }
@@ -101,6 +111,7 @@ public class CustomerModel {
         }
 
         // 3) If both fields are empty
+        theProduct=null;
         displayLaSearchResult = "Please type ProductID or Product Name";
         System.out.println("Please type ProductID or Product Name");
         updateView();
@@ -115,35 +126,20 @@ public class CustomerModel {
             // 1. Merges items with the same product ID (combining their quantities).
             // 2. Sorts the products in the trolley by product ID.
 
-            // Treat each click of "Add to trolley" as adding 1 unit of the searched product
-            theProduct.setOrderedQuantity(1);
+            // add 1 unit of the selected product
+            Product itemToAdd = new Product(
+                    theProduct.getProductId(),
+                    theProduct.getProductDescription(),
+                    theProduct.getProductImageName(),
+                    theProduct.getUnitPrice(),
+                    theProduct.getStockQuantity()
+            );
+            itemToAdd.setOrderedQuantity(1);
 
-            // 1) Merge: if a product with the same ID is already in the trolley, increase its ordered quantity
-            boolean merged = false;
-            for (Product p : trolley) {
-                if (p.getProductId().equals(theProduct.getProductId())) {
-                    p.setOrderedQuantity(p.getOrderedQuantity() + 1);
-                    merged = true;
-                    break;
-                }
-            }
+            trolley.add(itemToAdd);
 
-            // If not found in trolley, add it as a new entry
-            if (!merged) {
-                trolley.add(theProduct);
-            }
-
-            // 2) Sort trolley by product ID (ascending)
-            trolley.sort((a, b) -> {
-                // If product IDs are numeric strings, compare as numbers; otherwise compare as strings
-                try {
-                    int idA = Integer.parseInt(a.getProductId());
-                    int idB = Integer.parseInt(b.getProductId());
-                    return Integer.compare(idA, idB);
-                } catch (NumberFormatException e) {
-                    return a.getProductId().compareTo(b.getProductId());
-                }
-            });
+            // Merge + sort
+            trolley = organiseTrolley(trolley);
 
             displayTaTrolley = ProductListFormatter.buildString(trolley); //build a String for trolley so that we can show it
         }
@@ -195,7 +191,29 @@ public class CustomerModel {
                 // 2. Trigger a message window to notify the customer about the insufficient stock, rather than directly changing displayLaSearchResult.
                 //You can use the provided RemoveProductNotifier class and its showRemovalMsg method for this purpose.
                 //remember close the message window where appropriate (using method closeNotifierWindow() of RemoveProductNotifier class)
-                displayLaSearchResult = "Checkout failed due to insufficient stock for the following products:\n" + errorMsg.toString();
+
+                // Remove insufficient products from trolley
+                ArrayList<String> insufficientIds = new ArrayList<>();
+                for(Product p : insufficientProducts){
+                    insufficientIds.add(p.getProductId());
+                }
+                trolley.removeIf(p -> insufficientIds.contains(p.getProductId()));
+
+                // Update trolley display after removal
+                trolley = organiseTrolley(trolley);
+                displayTaTrolley = ProductListFormatter.buildString(trolley);
+
+                // Show message window to customerN
+                RemoveProductNotifier notifier = new RemoveProductNotifier();
+                notifier.showRemovalMsg(errorMsg.toString());
+
+                // If trolley becomes empty after removal, show a simple message on the search label as well
+                if(trolley.isEmpty()){
+                    displayLaSearchResult = "Some items were removed due to insufficient stock. Your trolley is now empty.";
+                } else {
+                    displayLaSearchResult = "Some items were removed due to insufficient stock. Please review your trolley.";
+                }
+
                 System.out.println("stock is not enough");
             }
         }
@@ -221,9 +239,41 @@ public class CustomerModel {
                 // Make a shallow copy to avoid modifying the original
                 grouped.put(id,new Product(p.getProductId(),p.getProductDescription(),
                         p.getProductImageName(),p.getUnitPrice(),p.getStockQuantity()));
+                grouped.get(id).setOrderedQuantity(p.getOrderedQuantity());
             }
         }
         return new ArrayList<>(grouped.values());
+    }
+
+    /**
+     * Organise trolley:
+     * 1) Merge items with the same product ID (add quantities)
+     * 2) Sort by product ID
+     */
+    private ArrayList<Product> organiseTrolley(ArrayList<Product> list){
+        Map<String, Product> merged = new HashMap<>();
+
+        for(Product p : list){
+            String id = p.getProductId();
+            if(merged.containsKey(id)){
+                Product exist = merged.get(id);
+                exist.setOrderedQuantity(exist.getOrderedQuantity() + p.getOrderedQuantity());
+            } else {
+                Product copy = new Product(
+                        p.getProductId(),
+                        p.getProductDescription(),
+                        p.getProductImageName(),
+                        p.getUnitPrice(),
+                        p.getStockQuantity()
+                );
+                copy.setOrderedQuantity(p.getOrderedQuantity());
+                merged.put(id, copy);
+            }
+        }
+
+        ArrayList<Product> organised = new ArrayList<>(merged.values());
+        organised.sort((a, b) -> a.getProductId().compareTo(b.getProductId()));
+        return organised;
     }
 
     void cancel(){
