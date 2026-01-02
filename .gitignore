@@ -36,3 +36,9 @@ build/
 
 ### Mac OS ###
 .DS_Store
+
+# Derby runtime database files
+*.dat
+*.lck
+derby.log
+happyShopDB/
