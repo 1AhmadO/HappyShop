@@ -23,7 +23,7 @@ import java.util.Map;
 public class CustomerModel {
     public CustomerView cusView;
     public DatabaseRW databaseRW; //Interface type, not specific implementation
-                                  //Benefits: Flexibility: Easily change the database implementation.
+    //Benefits: Flexibility: Easily change the database implementation.
 
     private Product theProduct =null; // product found from search
     private ArrayList<Product> trolley =  new ArrayList<>(); // a list of products in trolley
@@ -70,7 +70,37 @@ public class CustomerModel {
             //TODO
             // 1. Merges items with the same product ID (combining their quantities).
             // 2. Sorts the products in the trolley by product ID.
-            trolley.add(theProduct);
+
+            // Treat each click of "Add to trolley" as adding 1 unit of the searched product
+            theProduct.setOrderedQuantity(1);
+
+            // 1) Merge: if a product with the same ID is already in the trolley, increase its ordered quantity
+            boolean merged = false;
+            for (Product p : trolley) {
+                if (p.getProductId().equals(theProduct.getProductId())) {
+                    p.setOrderedQuantity(p.getOrderedQuantity() + 1);
+                    merged = true;
+                    break;
+                }
+            }
+
+            // If not found in trolley, add it as a new entry
+            if (!merged) {
+                trolley.add(theProduct);
+            }
+
+            // 2) Sort trolley by product ID (ascending)
+            trolley.sort((a, b) -> {
+                // If product IDs are numeric strings, compare as numbers; otherwise compare as strings
+                try {
+                    int idA = Integer.parseInt(a.getProductId());
+                    int idB = Integer.parseInt(b.getProductId());
+                    return Integer.compare(idA, idB);
+                } catch (NumberFormatException e) {
+                    return a.getProductId().compareTo(b.getProductId());
+                }
+            });
+
             displayTaTrolley = ProductListFormatter.buildString(trolley); //build a String for trolley so that we can show it
         }
         else{
@@ -175,9 +205,9 @@ public class CustomerModel {
         }
         cusView.update(imageName, displayLaSearchResult, displayTaTrolley,displayTaReceipt);
     }
-     // extra notes:
-     //Path.toUri(): Converts a Path object (a file or a directory path) to a URI object.
-     //File.toURI(): Converts a File object (a file on the filesystem) to a URI object
+    // extra notes:
+    //Path.toUri(): Converts a Path object (a file or a directory path) to a URI object.
+    //File.toURI(): Converts a File object (a file on the filesystem) to a URI object
 
     //for test only
     public ArrayList<Product> getTrolley() {
