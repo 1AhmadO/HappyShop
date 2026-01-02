@@ -36,10 +36,18 @@ public class CustomerModel {
 
     //SELECT productID, description, image, unitPrice,inStock quantity
     void search() throws SQLException {
+
         String productId = cusView.tfId.getText().trim();
-        if(!productId.isEmpty()){
+        String productName = cusView.tfName.getText().trim();
+
+        theProduct = null; // reset current product
+
+        // 1) If ID is provided, do ID search (exact match)
+        if (!productId.isEmpty()) {
+
             theProduct = databaseRW.searchByProductId(productId); //search database
-            if(theProduct != null && theProduct.getStockQuantity()>0){
+
+            if (theProduct != null && theProduct.getStockQuantity() > 0) {
                 double unitPrice = theProduct.getUnitPrice();
                 String description = theProduct.getProductDescription();
                 int stock = theProduct.getStockQuantity();
@@ -48,17 +56,53 @@ public class CustomerModel {
                 String quantityInfo = stock < 100 ? String.format("\n%d units left.", stock) : "";
                 displayLaSearchResult = baseInfo + quantityInfo;
                 System.out.println(displayLaSearchResult);
-            }
-            else{
-                theProduct=null;
+
+            } else {
+                theProduct = null;
                 displayLaSearchResult = "No Product was found with ID " + productId;
                 System.out.println("No Product was found with ID " + productId);
             }
-        }else{
-            theProduct=null;
-            displayLaSearchResult = "Please type ProductID";
-            System.out.println("Please type ProductID.");
+
+            updateView();
+            return;
         }
+
+        // 2) Otherwise, if Name is provided, do name search (partial match)
+        if (!productName.isEmpty()) {
+
+            ArrayList<Product> results = databaseRW.searchProduct(productName);
+
+            if (results != null && !results.isEmpty()) {
+
+                // Customer UI previews one product, so show the first match
+                theProduct = results.get(0);
+
+                double unitPrice = theProduct.getUnitPrice();
+                String description = theProduct.getProductDescription();
+                int stock = theProduct.getStockQuantity();
+
+                String baseInfo = String.format("Product_Id: %s\n%s,\nPrice: £%.2f",
+                        theProduct.getProductId(), description, unitPrice);
+
+                String quantityInfo = stock < 100 ? String.format("\n%d units left.", stock) : "";
+                String extraInfo = results.size() > 1 ? String.format("\n(%d matches found - showing first)", results.size()) : "";
+
+                displayLaSearchResult = baseInfo + quantityInfo + extraInfo;
+                System.out.println(displayLaSearchResult);
+
+            } else {
+                theProduct = null;
+                displayLaSearchResult = "No Product was found with name " + productName;
+                System.out.println("No Product was found with name " + productName);
+            }
+
+            updateView();
+            return;
+        }
+
+        // 3) If both fields are empty
+        displayLaSearchResult = "Please type ProductID or Product Name";
+        System.out.println("Please type ProductID or Product Name");
         updateView();
     }
 
