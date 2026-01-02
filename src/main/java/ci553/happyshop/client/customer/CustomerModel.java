@@ -57,10 +57,14 @@ public class CustomerModel {
                 System.out.println(displayLaSearchResult);
             }
             else{
-                theProduct=null;
-                displayLaSearchResult = "No Product was found with ID " + productId;
-                System.out.println("No Product was found with ID " + productId);
+                if(theProduct != null && theProduct.getStockQuantity() == 0){
+                    displayLaSearchResult = "Product " + productId + " is currently out of stock.";
+                } else {
+                    displayLaSearchResult = "No Product was found with ID " + productId;
+                }
+                theProduct = null;
             }
+
 
             updateView();
             return;
